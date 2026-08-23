@@ -2,9 +2,7 @@
  * binkterm_sync_service.js
  *
  * Synchronet "Service" (see services.ini) that BinktermPHP calls to create
- * or verify a Synchronet user account for door-launch purposes, keeping the
- * "bt-" prefix convention so BinktermPHP-provisioned accounts are always
- * identifiable at a glance in the Synchronet user list.
+ * or verify a Synchronet user account for door-launch purposes.
  *
  * PROTOCOL
  * --------
@@ -15,7 +13,7 @@
  *   {"api_key":"<shared secret>","username":"awehttam"}
  *
  * Response (success):
- *   {"success":true,"username":"bt-awehttam","user_number":42,"created":true}
+ *   {"success":true,"username":"awehttam","user_number":42,"created":true}
  *
  *   "created" is false if the account already existed and this call was a
  *   no-op sync check.
@@ -54,7 +52,7 @@
  * is standard in community Synchronet SSJS but I could not cross-check it
  * against your installed version's jsobjs.html in this session. Confirm it
  * (and the User.security.level property, if you decide to set an explicit
- * security level for bt- accounts) against:
+ * security level for these accounts) against:
  *   http://your-bbs/docs/jsobjs.html  -- or the copy shipped with your install
  * search for the "User class" section.
  */
@@ -62,7 +60,6 @@
 // ---- Configuration -------------------------------------------------------
 
 var API_KEY = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET";
-var USERNAME_PREFIX = "bt-";
 var NEW_USER_PASSWORD_LENGTH = 24; // random password; trusted RLogin bypasses it anyway
 
 // Only these IPs/subnets may call this service. Entries are either an exact
@@ -255,14 +252,12 @@ if (!req.username || typeof req.username !== "string") {
 	exit();
 }
 
-// Strip anything unsafe out of the incoming username before prefixing it.
-var rawUsername = req.username.replace(/[^A-Za-z0-9_\-\.]/g, "");
-if (rawUsername.length === 0) {
+// Strip anything unsafe out of the incoming username.
+var fullUsername = req.username.replace(/[^A-Za-z0-9_\-\.]/g, "");
+if (fullUsername.length === 0) {
 	sendResponse({ success: false, error: "username invalid after sanitization" });
 	exit();
 }
-
-var fullUsername = USERNAME_PREFIX + rawUsername;
 
 // Truncate to Synchronet's alias length limit (25 chars) if needed.
 if (fullUsername.length > 25) {

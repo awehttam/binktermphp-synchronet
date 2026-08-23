@@ -4,9 +4,6 @@ A Synchronet `services.ini` service that lets [BinktermPHP](https://github.com/)
 provision (or verify) Synchronet user accounts, so BinktermPHP users can be handed off into
 Synchronet doors/games without a manual signup step.
 
-Accounts created by this service are prefixed `bt-` so they're always identifiable in the
-Synchronet user list as BinktermPHP-provisioned.
-
 ## Status
 
 Early scaffolding. The JS service (`binktermphp-api.js`) is drafted but **untested** -- it
@@ -26,7 +23,7 @@ Request:
 Response (success):
 
 ```json
-{"success":true,"username":"bt-awehttam","user_number":42,"created":true}
+{"success":true,"username":"awehttam","user_number":42,"created":true}
 ```
 
 `created` is `false` if the account already existed and the call was just a sync/lookup.
@@ -64,7 +61,7 @@ Response (failure):
 
 - Confirm `newUser.password` is the correct property name for your installed Synchronet
   version (check `jsobjs.html` shipped with your install, "User class" section).
-- Decide whether `bt-` accounts need an explicit `User.security.level`.
+- Decide whether provisioned accounts need an explicit `User.security.level`.
 - Run an end-to-end test against a real Synchronet system (create, then re-sync an existing
   user) before wiring BinktermPHP to call this in production.
 
