@@ -70,4 +70,4 @@ Response (failure):
 
 ## License
 
-TBD.
+MIT -- see [LICENSE](LICENSE).
