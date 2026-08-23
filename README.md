@@ -2,7 +2,7 @@
 
 A Synchronet `services.ini` service that lets [BinktermPHP](https://github.com/) remotely
 provision (or verify) Synchronet user accounts, so BinktermPHP users can be handed off into
-Synchronet doors/games without a manual signup step.
+Synchronet doors/games via RLogin, without a manual signup step.
 
 ## Status
 
