@@ -6,9 +6,8 @@ Synchronet doors/games without a manual signup step.
 
 ## Status
 
-Early scaffolding. The JS service (`binkterm_sync_service.js`) is drafted but **untested** -- it
-has not been run against a live Synchronet install yet. Testing happens on a remote
-Synchronet system, not locally.
+Tested against a live Synchronet install (create and re-sync of an existing user), on a
+remote Synchronet system -- not locally.
 
 ## How it works
 
@@ -63,8 +62,6 @@ Response (failure):
 ## Before trusting this in production
 
 - Decide whether provisioned accounts need an explicit `User.security.level`.
-- Run an end-to-end test against a real Synchronet system (create, then re-sync an existing
-  user) before wiring BinktermPHP to call this in production.
 
 ## License
 
