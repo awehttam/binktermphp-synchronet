@@ -58,10 +58,19 @@
  *      Command = binkterm_sync_service.js
  *      MaxClients = 5
  *
- *    No Options flags are needed -- the default (per-connection thread,
- *    handles one request then exits) is what this script expects. Do NOT
- *    set STATIC/LOOP; those are for long-running single-instance services
- *    (e.g. ircd.js) that manage their own client loop.
+ *    Do NOT set STATIC/LOOP in Options; those are for long-running
+ *    single-instance services (e.g. ircd.js) that manage their own client
+ *    loop, not the per-connection-thread model this script expects.
+ *
+ *    To require TLS on this connection (recommended -- see "TLS" below),
+ *    add the TLS flag instead:
+ *
+ *      [binkterm_sync]
+ *      Port = 24512
+ *      Command = binkterm_sync_service.js
+ *      MaxClients = 5
+ *      Options = TLS
+ *
  * 4. Add BinktermPHP's IP address(es) to TRUSTED_IPS below. Connections
  *    from any other address are rejected before the request body is even
  *    parsed. Still bind the listening port to localhost or firewall it
@@ -69,6 +78,25 @@
  *    not a substitute for network restriction (spoofing/NAT edge cases,
  *    compromised hosts on the same LAN, etc.).
  * 5. Restart (or reload) the Services server.
+ *
+ * TLS
+ * ---
+ * BinktermPHP's client defaults to requiring TLS on this connection, so add
+ * `Options = TLS` to the section (step 3 above) to match -- this makes the
+ * Services server terminate TLS before this script ever sees the socket, no
+ * code changes needed here, since `client`/`readln`/`writeln` already sit on
+ * top of whatever transport the Services server negotiated. TLS uses the
+ * same certificate/key as every other TLS-enabled Synchronet service
+ * (`ctrl/ssl.cert`), configured under SCFG -> System -> Security -- generate
+ * a self-signed certificate there if you don't already have one for another
+ * service. BinktermPHP's client
+ * defaults to accepting a self-signed certificate (no verification) since
+ * this is typically a LAN/localhost link between two systems the same sysop
+ * controls; see the `tls_verify_peer` option in binkterm-php's
+ * `config/rlogin_synchronet_service.json` if you want strict verification
+ * against a CA-signed certificate instead. Whichever you choose, `Options`
+ * here and the client's `tls` setting must agree -- a plaintext client
+ * cannot reach a TLS-only service, or vice versa.
  */
 
 // ---- Configuration -------------------------------------------------------
