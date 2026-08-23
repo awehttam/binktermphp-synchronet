@@ -29,15 +29,13 @@
  *
  *      [binkterm_sync]
  *      Port = 24512
- *      Protocol = tcp
  *      Command = binkterm_sync_service.js
  *      MaxClients = 5
- *      Options = STATIC_OUT
  *
- *    (Adjust to match your existing services.ini entries -- exact directive
- *    names/casing vary a bit by Synchronet version, so cross-check an
- *    existing [service] block in your own ctrl/services.ini rather than
- *    trusting this verbatim.)
+ *    No Options flags are needed -- the default (per-connection thread,
+ *    handles one request then exits) is what this script expects. Do NOT
+ *    set STATIC/LOOP; those are for long-running single-instance services
+ *    (e.g. ircd.js) that manage their own client loop.
  * 4. Add BinktermPHP's IP address(es) to TRUSTED_IPS below. Connections
  *    from any other address are rejected before the request body is even
  *    parsed. Still bind the listening port to localhost or firewall it
@@ -46,15 +44,11 @@
  *    compromised hosts on the same LAN, etc.).
  * 5. Restart (or reload) the Services server.
  *
- * VERIFY BEFORE TRUSTING IN PRODUCTION
- * -------------------------------------
- * The User object property used below to set the password (`newUser.password`)
- * is standard in community Synchronet SSJS but I could not cross-check it
- * against your installed version's jsobjs.html in this session. Confirm it
- * (and the User.security.level property, if you decide to set an explicit
- * security level for these accounts) against:
- *   http://your-bbs/docs/jsobjs.html  -- or the copy shipped with your install
- * search for the "User class" section.
+ * NOTES
+ * -----
+ * - If you decide accounts need an explicit security level, set
+ *   `newUser.security.level` after creation -- check jsobjs.html for your
+ *   installed version if the exact sub-property name is unclear.
  */
 
 // ---- Configuration -------------------------------------------------------
@@ -285,10 +279,19 @@ if (!system.check_name(fullUsername, true)) {
 	exit();
 }
 
-var newUser = system.new_user(fullUsername);
+var newUser;
+try {
+	// new_user() throws a JS exception (rather than returning an error code)
+	// when check_name() would have rejected the name -- we already checked
+	// that above, but a race with another connection could still hit it.
+	newUser = system.new_user(fullUsername);
+} catch (e) {
+	log(LOG_ERR, "binkterm_sync: system.new_user() threw for " + fullUsername + ": " + e);
+	sendResponse({ success: false, error: "account creation failed: " + e });
+	exit();
+}
 
 if (typeof newUser !== "object") {
-	// system.new_user() returns a numeric error code on failure
 	log(LOG_ERR, "binkterm_sync: system.new_user() failed with code " + newUser + " for " + fullUsername);
 	sendResponse({ success: false, error: "account creation failed (code " + newUser + ")" });
 	exit();
@@ -297,8 +300,6 @@ if (typeof newUser !== "object") {
 // Set a random password. Real auth for this account is expected to happen
 // via a trusted RLogin relationship configured for BinktermPHP's IP, not
 // this password -- see project notes on the RLogin xtrn= handoff.
-// NOTE: verify `.password` is correct for your Synchronet version -- see
-// header comment above.
 newUser.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
 
 log(LOG_INFO, "binkterm_sync: created user #" + newUser.number + " (" + fullUsername + ")");

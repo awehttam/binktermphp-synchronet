@@ -43,14 +43,14 @@ Response (failure):
    ```ini
    [binkterm_sync]
    Port = 24512
-   Protocol = tcp
    Command = binkterm_sync_service.js
    MaxClients = 5
-   Options = STATIC_OUT
    ```
 
-   Cross-check directive names/casing against an existing `[service]` block in your own
-   `services.ini` -- these vary a bit by Synchronet version.
+   No `Options` flags are needed -- the default (one thread per connection, handles a
+   single request then exits) is what this script expects. Do not set `STATIC`/`LOOP`;
+   those are for long-running single-instance services (e.g. `ircd.js`) that manage
+   their own client loop.
 
 4. Add BinktermPHP's IP address(es) to `TRUSTED_IPS` in the file. Connections from any other
    address are rejected before the request body is parsed. The IP allowlist and API key are
@@ -59,8 +59,6 @@ Response (failure):
 
 ## Before trusting this in production
 
-- Confirm `newUser.password` is the correct property name for your installed Synchronet
-  version (check `jsobjs.html` shipped with your install, "User class" section).
 - Decide whether provisioned accounts need an explicit `User.security.level`.
 - Run an end-to-end test against a real Synchronet system (create, then re-sync an existing
   user) before wiring BinktermPHP to call this in production.
