@@ -10,7 +10,10 @@
  * server replies with a single line of JSON, then the connection closes.
  *
  * Request:
- *   {"api_key":"<shared secret>","username":"awehttam"}
+ *   {"api_key":"<shared secret>","username":"awehttam","real_name":"...","location":"..."}
+ *
+ *   "real_name" and "location" are optional. When present they are applied
+ *   to the account (both on creation and on an existing-account sync call).
  *
  * Response (success):
  *   {"success":true,"username":"awehttam","user_number":42,"created":true}
@@ -212,6 +215,19 @@ function sendResponse(obj) {
 	writeln(JSON.stringify(obj));
 }
 
+// Strip control characters and clamp to maxLen (Synchronet's LEN_NAME /
+// LEN_LOCATION fixed-width record fields). Returns null if the field was
+// present but not a string.
+function sanitizeField(value, maxLen) {
+	if (value === undefined || value === null) {
+		return undefined;
+	}
+	if (typeof value !== "string") {
+		return null;
+	}
+	return value.replace(/[\x00-\x1f\x7f]/g, "").substring(0, maxLen);
+}
+
 // ---- Main ------------------------------------------------------------
 
 if (!isTrustedIp(client.ip_address)) {
@@ -258,11 +274,33 @@ if (fullUsername.length > 25) {
 	fullUsername = fullUsername.substring(0, 25);
 }
 
+// LEN_NAME=25, LEN_LOCATION=30 (see sbbsdefs.h). Both optional.
+var realName = sanitizeField(req.real_name, 25);
+if (realName === null) {
+	sendResponse({ success: false, error: "real_name must be a string" });
+	exit();
+}
+var location = sanitizeField(req.location, 30);
+if (location === null) {
+	sendResponse({ success: false, error: "location must be a string" });
+	exit();
+}
+
 // ---- Check for existing account ---------------------------------------
 
 var existingNum = system.matchuser(fullUsername, false);
 
 if (existingNum > 0) {
+	if (realName !== undefined || location !== undefined) {
+		var existingUser = new User(existingNum);
+		if (realName !== undefined) {
+			existingUser.name = realName;
+		}
+		if (location !== undefined) {
+			existingUser.location = location;
+		}
+	}
+
 	sendResponse({
 		success: true,
 		username: fullUsername,
@@ -301,6 +339,13 @@ if (typeof newUser !== "object") {
 // via a trusted RLogin relationship configured for BinktermPHP's IP, not
 // this password -- see project notes on the RLogin xtrn= handoff.
 newUser.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
+
+if (realName !== undefined) {
+	newUser.name = realName;
+}
+if (location !== undefined) {
+	newUser.location = location;
+}
 
 log(LOG_INFO, "binkterm_sync: created user #" + newUser.number + " (" + fullUsername + ")");
 

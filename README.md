@@ -17,8 +17,11 @@ One TCP connection = one request/response, then the connection closes.
 Request:
 
 ```json
-{"api_key":"<shared secret>","username":"awehttam"}
+{"api_key":"<shared secret>","username":"awehttam","real_name":"...","location":"..."}
 ```
+
+`real_name` and `location` are optional. When present they're applied to the account, both
+on creation and on an existing-account sync call.
 
 Response (success):
 
