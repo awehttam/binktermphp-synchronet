@@ -2,15 +2,23 @@
  * binkterm_sync_service.js
  *
  * Synchronet "Service" (see services.ini) that BinktermPHP calls to create
- * or verify a Synchronet user account for door-launch purposes.
+ * or verify a Synchronet user account for door-launch purposes, and to list
+ * installed external programs (doors) so BinktermPHP can offer a
+ * one-click import into its own RLogin door configuration.
  *
  * PROTOCOL
  * --------
  * One connection = one request/response. Client sends a single line of JSON,
  * server replies with a single line of JSON, then the connection closes.
  *
+ * All requests carry an "action" field ("provision" or "list_doors").
+ * "action" may be omitted for backward compatibility -- it then defaults to
+ * "provision" (the only action this protocol had before list_doors existed).
+ *
+ * --- action: "provision" (default) ---
+ *
  * Request:
- *   {"api_key":"<shared secret>","username":"awehttam","real_name":"...","location":"..."}
+ *   {"action":"provision","api_key":"<shared secret>","username":"awehttam","real_name":"...","location":"..."}
  *
  *   "real_name" and "location" are optional. When present they are applied
  *   to the account (both on creation and on an existing-account sync call).
@@ -20,6 +28,21 @@
  *
  *   "created" is false if the account already existed and this call was a
  *   no-op sync check.
+ *
+ * Response (failure):
+ *   {"success":false,"error":"reason"}
+ *
+ * --- action: "list_doors" ---
+ *
+ * Request:
+ *   {"action":"list_doors","api_key":"<shared secret>"}
+ *
+ * Response (success):
+ *   {"success":true,"doors":[{"code":"lord","name":"Legend of the Red Dragon","sec_code":"games","sec_name":"Games"}, ...]}
+ *
+ *   "code" is the door's internal xtrn program code -- the value BinktermPHP
+ *   needs for the rlogin door's Terminal Type field ("xtrn=<code>") so
+ *   Synchronet's door server routes straight into that program.
  *
  * Response (failure):
  *   {"success":false,"error":"reason"}
@@ -223,6 +246,45 @@ function sanitizeField(value, maxLen) {
 	return value.replace(/[\x00-\x1f\x7f]/g, "").substring(0, maxLen);
 }
 
+// List installed external programs (doors) from xtrn_area, grouped by
+// section, flattened into one array. Each entry's "code" is what
+// BinktermPHP needs for the rlogin Terminal Type "xtrn=<code>" handoff.
+//
+// NOTE: xtrn_area.sec_list / .prog_list property names are per Synchronet's
+// documented JSObjects (XtrnSection / XtrnProgram). Not yet exercised
+// against a live install for this action specifically -- verify the field
+// names still match your Synchronet version if this comes back empty or
+// throws, and check the Services server log for the caught exception.
+function listDoors() {
+	if (typeof xtrn_area === "undefined" || !xtrn_area || !xtrn_area.sec_list) {
+		sendResponse({ success: false, error: "xtrn_area not available in this context" });
+		return;
+	}
+
+	var doors = [];
+	try {
+		for (var i = 0; i < xtrn_area.sec_list.length; i++) {
+			var sec = xtrn_area.sec_list[i];
+			var progList = sec.prog_list || [];
+			for (var j = 0; j < progList.length; j++) {
+				var prog = progList[j];
+				doors.push({
+					code: prog.code,
+					name: prog.name,
+					sec_code: sec.code,
+					sec_name: sec.name
+				});
+			}
+		}
+	} catch (e) {
+		log(LOG_ERR, "binkterm_sync: list_doors failed: " + e);
+		sendResponse({ success: false, error: "failed to enumerate xtrn_area: " + e });
+		return;
+	}
+
+	sendResponse({ success: true, doors: doors });
+}
+
 // ---- Main ------------------------------------------------------------
 
 if (!isTrustedIp(client.ip_address)) {
@@ -249,6 +311,18 @@ try {
 if (req.api_key !== API_KEY) {
 	log(LOG_WARNING, "binkterm_sync: rejected request with bad api_key from trusted IP " + client.ip_address);
 	sendResponse({ success: false, error: "unauthorized" });
+	exit();
+}
+
+var action = req.action || "provision";
+
+if (action === "list_doors") {
+	listDoors();
+	exit();
+}
+
+if (action !== "provision") {
+	sendResponse({ success: false, error: "unknown action: " + action });
 	exit();
 }
 

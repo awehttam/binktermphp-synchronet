@@ -11,12 +11,16 @@ remote Synchronet system -- not locally.
 
 ## How it works
 
-One TCP connection = one request/response, then the connection closes.
+One TCP connection = one request/response, then the connection closes. Every request carries
+an `action` field; it may be omitted, in which case it defaults to `provision` (the only
+action this protocol had before `list_doors` was added).
+
+### `action: "provision"` (default)
 
 Request:
 
 ```json
-{"api_key":"<shared secret>","username":"awehttam","real_name":"...","location":"..."}
+{"action":"provision","api_key":"<shared secret>","username":"awehttam","real_name":"...","location":"..."}
 ```
 
 `real_name` and `location` are optional. When present they're applied to the account, both
@@ -29,6 +33,34 @@ Response (success):
 ```
 
 `created` is `false` if the account already existed and the call was just a sync/lookup.
+
+Response (failure):
+
+```json
+{"success":false,"error":"reason"}
+```
+
+### `action: "list_doors"`
+
+Lists installed external programs (doors) so BinktermPHP can offer a one-click import into
+its own RLogin door configuration.
+
+Request:
+
+```json
+{"action":"list_doors","api_key":"<shared secret>"}
+```
+
+Response (success):
+
+```json
+{"success":true,"doors":[{"code":"lord","name":"Legend of the Red Dragon","sec_code":"games","sec_name":"Games"}]}
+```
+
+`code` is the door's internal xtrn program code -- the value BinktermPHP needs for the rlogin
+door's Terminal Type field (`xtrn=<code>`) so Synchronet's door server routes straight into
+that program. Not yet exercised against a live install; see the note in
+`binkterm_sync_service.js` if this comes back empty.
 
 Response (failure):
 
