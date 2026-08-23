@@ -46,18 +46,13 @@
  *    not a substitute for network restriction (spoofing/NAT edge cases,
  *    compromised hosts on the same LAN, etc.).
  * 5. Restart (or reload) the Services server.
- *
- * NOTES
- * -----
- * - If you decide accounts need an explicit security level, set
- *   `newUser.security.level` after creation -- check jsobjs.html for your
- *   installed version if the exact sub-property name is unclear.
  */
 
 // ---- Configuration -------------------------------------------------------
 
 var API_KEY = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET";
 var NEW_USER_PASSWORD_LENGTH = 24; // random password; trusted RLogin bypasses it anyway
+var DEFAULT_SECURITY_LEVEL = 50; // User.level assigned to newly created accounts
 
 // Only these IPs/subnets may call this service. Entries are either an exact
 // address ("203.0.113.10", "::1") or CIDR notation ("203.0.113.0/24",
@@ -339,6 +334,7 @@ if (typeof newUser !== "object") {
 // via a trusted RLogin relationship configured for BinktermPHP's IP, not
 // this password -- see project notes on the RLogin xtrn= handoff.
 newUser.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
+newUser.level = DEFAULT_SECURITY_LEVEL;
 
 if (realName !== undefined) {
 	newUser.name = realName;

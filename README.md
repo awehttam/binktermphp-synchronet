@@ -39,7 +39,9 @@ Response (failure):
 ## Setup
 
 1. Copy `binkterm_sync_service.js` to your Synchronet `exec/` or `mods/` directory.
-2. Change `API_KEY` in the file to a long random value, shared with BinktermPHP.
+2. Change `API_KEY` in the file to a long random value, shared with BinktermPHP. Also
+   review `DEFAULT_SECURITY_LEVEL` (defaults to `50`), the `User.level` assigned to
+   newly created accounts.
 3. Add a section to `ctrl/services.ini`, e.g.:
 
    ```ini
@@ -70,10 +72,6 @@ per line; wildcards `*` are allowed). Any address not listed there must not be a
 reach your BBS's RLogin port at all -- firewall it in addition to the allowlist. Treat
 this the same way as `TRUSTED_IPS` above: both lists need to be kept in sync and both
 are defense-in-depth around network restriction, not a replacement for it.
-
-## Before trusting this in production
-
-- Decide whether provisioned accounts need an explicit `User.security.level`.
 
 ## License
 
