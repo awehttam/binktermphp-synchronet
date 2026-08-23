@@ -6,7 +6,7 @@ Synchronet doors/games without a manual signup step.
 
 ## Status
 
-Early scaffolding. The JS service (`binktermphp-api.js`) is drafted but **untested** -- it
+Early scaffolding. The JS service (`binkterm_sync_service.js`) is drafted but **untested** -- it
 has not been run against a live Synchronet install yet. Testing happens on a remote
 Synchronet system, not locally.
 
@@ -39,7 +39,7 @@ Response (failure):
 
 ## Setup
 
-1. Copy `binktermphp-api.js` to your Synchronet `exec/` or `mods/` directory.
+1. Copy `binkterm_sync_service.js` to your Synchronet `exec/` or `mods/` directory.
 2. Change `API_KEY` in the file to a long random value, shared with BinktermPHP.
 3. Add a section to `ctrl/services.ini`, e.g.:
 
