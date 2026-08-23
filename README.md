@@ -59,6 +59,18 @@ Response (failure):
    defense-in-depth, not a substitute for firewalling the port.
 5. Restart (or reload) the Services server.
 
+## RLogin security
+
+Accounts provisioned by this service are meant to be reached via a trusted RLogin
+handoff from BinktermPHP, since RLogin itself does no authentication -- whoever can
+connect as a given username is logged in as that user, no password required.
+
+Restrict `ctrl/rlogin.cfg` to only the IP address(es) BinktermPHP connects from (one
+per line; wildcards `*` are allowed). Any address not listed there must not be able to
+reach your BBS's RLogin port at all -- firewall it in addition to the allowlist. Treat
+this the same way as `TRUSTED_IPS` above: both lists need to be kept in sync and both
+are defense-in-depth around network restriction, not a replacement for it.
+
 ## Before trusting this in production
 
 - Decide whether provisioned accounts need an explicit `User.security.level`.
