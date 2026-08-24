@@ -308,8 +308,9 @@ function sanitizeField(value, maxLen) {
 // the fields that were actually present, or null if the file doesn't exist
 // or couldn't be parsed. Never throws -- callers treat this as optional
 // enrichment, not a required step.
-function readInstallXtrnMeta(startupDir) {
+function readInstallXtrnMeta(startupDir, code) {
 	if (!startupDir) {
+		log(LOG_DEBUG, "binkterm_sync: " + code + " has no startup_dir set -- skipping install-xtrn.ini lookup");
 		return null;
 	}
 
@@ -324,12 +325,16 @@ function readInstallXtrnMeta(startupDir) {
 	var iniPath = fullpath(dir + "install-xtrn.ini");
 
 	if (!file_exists(iniPath)) {
+		log(LOG_INFO, "binkterm_sync: " + code + " startup_dir=" + startupDir + " -> " + iniPath + " (not found)");
 		return null;
 	}
+
+	log(LOG_DEBUG, "binkterm_sync: " + code + " startup_dir=" + startupDir + " -> " + iniPath + " (found)");
 
 	var f = new File(iniPath);
 	try {
 		if (!f.open("r")) {
+			log(LOG_WARNING, "binkterm_sync: " + code + " could not open " + iniPath + ": " + f.error);
 			return null;
 		}
 
@@ -350,9 +355,10 @@ function readInstallXtrnMeta(startupDir) {
 			meta.categories = categories;
 		}
 
+		log(LOG_DEBUG, "binkterm_sync: " + code + " parsed " + iniPath + ": " + JSON.stringify(meta));
 		return meta;
 	} catch (e) {
-		log(LOG_WARNING, "binkterm_sync: failed to parse " + iniPath + ": " + e);
+		log(LOG_WARNING, "binkterm_sync: " + code + " failed to parse " + iniPath + ": " + e);
 		return null;
 	} finally {
 		f.close();
@@ -397,7 +403,7 @@ function listDoors() {
 				var startupDir = prog.startup_dir || "";
 				if (!Object.prototype.hasOwnProperty.call(metaCache, startupDir)) {
 					try {
-						metaCache[startupDir] = readInstallXtrnMeta(startupDir);
+						metaCache[startupDir] = readInstallXtrnMeta(startupDir, prog.code);
 					} catch (e) {
 						log(LOG_WARNING, "binkterm_sync: install-xtrn.ini lookup failed for " + prog.code + ": " + e);
 						metaCache[startupDir] = null;
