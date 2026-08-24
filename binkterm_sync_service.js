@@ -652,8 +652,8 @@ if (typeof newUser !== "object") {
 // Set a random password. Real auth for this account is expected to happen
 // via a trusted RLogin relationship configured for BinktermPHP's IP, not
 // this password -- see project notes on the RLogin xtrn= handoff.
-newUser.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
-newUser.level = DEFAULT_SECURITY_LEVEL;
+newUser.security.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
+newUser.security.level = DEFAULT_SECURITY_LEVEL;
 
 if (realName !== undefined) {
 	newUser.name = realName;
