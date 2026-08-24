@@ -375,6 +375,16 @@ function sendResponse(obj) {
 	writeln(JSON.stringify(obj));
 }
 
+// True if `dir` is already an absolute path -- a leading "/" (Unix), a
+// drive letter ("C:\" or "C:/"), or a UNC path ("\\server\share"). Most
+// doors get startup_dir written relative to ctrl_dir by install-xtrn.js
+// (see relpath.get() in that script), but a door added or edited by hand
+// through SCFG can end up with an absolute path typed directly into the
+// Startup Directory field instead -- both are valid xtrn.ini values.
+function isAbsolutePath(dir) {
+	return /^(\/|[A-Za-z]:[\\\/]|\\\\)/.test(dir);
+}
+
 // Strip control characters and clamp to maxLen (Synchronet's LEN_NAME /
 // LEN_LOCATION fixed-width record fields). Returns null if the field was
 // present but not a string.
@@ -399,11 +409,12 @@ function readInstallXtrnMeta(startupDir, code) {
 		return null;
 	}
 
-	// startup_dir is stored relative to ctrl_dir (see install-xtrn.js's
-	// relpath.get(system.ctrl_dir, startup_dir) at install time) -- the same
+	// startup_dir is usually stored relative to ctrl_dir (see install-xtrn.js's
+	// relpath.get(system.ctrl_dir, startup_dir) at install time -- the same
 	// convention Synchronet's own scripts use to resolve it back, e.g.
-	// xtrn/doorscan/003-doorscan.xjs's system.ctrl_dir + "../xtrn/...".
-	var dir = system.ctrl_dir + startupDir;
+	// xtrn/doorscan/003-doorscan.xjs's system.ctrl_dir + "../xtrn/..."), but
+	// a hand-entered SCFG value can be absolute instead -- see isAbsolutePath().
+	var dir = isAbsolutePath(startupDir) ? startupDir : (system.ctrl_dir + startupDir);
 	if (dir.charAt(dir.length - 1) !== "/" && dir.charAt(dir.length - 1) !== "\\") {
 		dir += "/";
 	}
