@@ -54,13 +54,18 @@ Request:
 Response (success):
 
 ```json
-{"success":true,"doors":[{"code":"lord","name":"Legend of the Red Dragon","sec_code":"games","sec_name":"Games"}]}
+{"success":true,"doors":[{"code":"lord","name":"Legend of the Red Dragon","sec_code":"games","sec_name":"Games","description":"...","author":"...","categories":["Games","RPG"]}]}
 ```
 
 `code` is the door's internal xtrn program code -- the value BinktermPHP needs for the rlogin
 door's Terminal Type field (`xtrn=<code>`) so Synchronet's door server routes straight into
 that program. Not yet exercised against a live install; see the note in
 `binkterm_sync_service.js` if this comes back empty.
+
+`description`, `author`, and `categories` are best-effort: Synchronet's own `xtrn.ini` record
+has no such fields, so the service opportunistically re-reads the door's `install-xtrn.ini`
+(the `Desc:`/`By:`/`Cats:`/`Subs:` header lines most doors were installed from) and includes
+whatever it finds. They're simply omitted for doors with no `install-xtrn.ini` on disk.
 
 Response (failure):
 

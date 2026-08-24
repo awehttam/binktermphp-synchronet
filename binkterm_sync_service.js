@@ -38,11 +38,14 @@
  *   {"action":"list_doors","api_key":"<shared secret>"}
  *
  * Response (success):
- *   {"success":true,"doors":[{"code":"lord","name":"Legend of the Red Dragon","sec_code":"games","sec_name":"Games"}, ...]}
+ *   {"success":true,"doors":[{"code":"lord","name":"Legend of the Red Dragon","sec_code":"games","sec_name":"Games","description":"...","author":"...","categories":["Games","RPG"]}, ...]}
  *
  *   "code" is the door's internal xtrn program code -- the value BinktermPHP
  *   needs for the rlogin door's Terminal Type field ("xtrn=<code>") so
  *   Synchronet's door server routes straight into that program.
+ *
+ *   "description", "author", and "categories" are best-effort and may be
+ *   absent -- see "install-xtrn.ini enrichment" below.
  *
  * Response (failure):
  *   {"success":false,"error":"reason"}
@@ -78,6 +81,32 @@
  *    not a substitute for network restriction (spoofing/NAT edge cases,
  *    compromised hosts on the same LAN, etc.).
  * 5. Restart (or reload) the Services server.
+ *
+ * install-xtrn.ini enrichment
+ * ---------------------------
+ * Synchronet's own external-program record (xtrn.ini, exposed to JS as
+ * xtrn_area.sec_list[].prog_list[]) has no description or author field --
+ * only code/name/section/command-line/etc. Most installed doors, however,
+ * were installed via install-xtrn.js from an install-xtrn.ini file (see
+ * exec/install-xtrn.js) whose root section carries sysop-facing metadata as
+ * "Name:", "Desc:", "By:", "Cats:", and "Subs:" lines, e.g.:
+ *
+ *   Name: Chicken Delivery
+ *   Desc: You are a chicken on a mission.
+ *   By:   echicken -at- bbs.electronicchicken.com
+ *   Cats: Games
+ *   Subs: Platformer, JavaScript
+ *
+ * listDoors() below opportunistically re-reads that file, resolved from
+ * each program's "startup_dir" (which install-xtrn.js stores relative to
+ * ctrl_dir -- see cfg.ctrl_dir + startup_dir usage throughout Synchronet's
+ * own JS, e.g. xtrn/doorscan/003-doorscan.xjs), and attaches "description",
+ * "author" (the "By:" list joined with ", "), and "categories" (Cats: +
+ * Subs: combined) when the file is present and parses cleanly. This is
+ * best-effort: doors installed by hand, by a non-install-xtrn.ini installer,
+ * or with the file since deleted simply come back without these fields, and
+ * a read/parse failure for one door's install-xtrn.ini never fails the
+ * whole list_doors request.
  *
  * TLS
  * ---
@@ -274,9 +303,68 @@ function sanitizeField(value, maxLen) {
 	return value.replace(/[\x00-\x1f\x7f]/g, "").substring(0, maxLen);
 }
 
+// Best-effort read of a door's install-xtrn.ini (see "install-xtrn.ini
+// enrichment" above). Returns {description, author, categories} with only
+// the fields that were actually present, or null if the file doesn't exist
+// or couldn't be parsed. Never throws -- callers treat this as optional
+// enrichment, not a required step.
+function readInstallXtrnMeta(startupDir) {
+	if (!startupDir) {
+		return null;
+	}
+
+	// startup_dir is stored relative to ctrl_dir (see install-xtrn.js's
+	// relpath.get(system.ctrl_dir, startup_dir) at install time) -- the same
+	// convention Synchronet's own scripts use to resolve it back, e.g.
+	// xtrn/doorscan/003-doorscan.xjs's system.ctrl_dir + "../xtrn/...".
+	var dir = system.ctrl_dir + startupDir;
+	if (dir.charAt(dir.length - 1) !== "/" && dir.charAt(dir.length - 1) !== "\\") {
+		dir += "/";
+	}
+	var iniPath = fullpath(dir + "install-xtrn.ini");
+
+	if (!file_exists(iniPath)) {
+		return null;
+	}
+
+	var f = new File(iniPath);
+	try {
+		if (!f.open("r")) {
+			return null;
+		}
+
+		var desc = f.iniGetValue(null, "desc");
+		var by = f.iniGetValue(null, "by", []);
+		var cats = f.iniGetValue(null, "cats", []);
+		var subs = f.iniGetValue(null, "subs", []);
+
+		var meta = {};
+		if (desc) {
+			meta.description = desc;
+		}
+		if (by && by.length) {
+			meta.author = by.join(", ");
+		}
+		var categories = [].concat(cats || [], subs || []);
+		if (categories.length) {
+			meta.categories = categories;
+		}
+
+		return meta;
+	} catch (e) {
+		log(LOG_WARNING, "binkterm_sync: failed to parse " + iniPath + ": " + e);
+		return null;
+	} finally {
+		f.close();
+	}
+}
+
 // List installed external programs (doors) from xtrn_area, grouped by
 // section, flattened into one array. Each entry's "code" is what
 // BinktermPHP needs for the rlogin Terminal Type "xtrn=<code>" handoff.
+// "description"/"author"/"categories" are opportunistically filled in from
+// each program's install-xtrn.ini, if one can be found -- see
+// readInstallXtrnMeta() and the "install-xtrn.ini enrichment" header note.
 //
 // NOTE: xtrn_area.sec_list / .prog_list property names are per Synchronet's
 // documented JSObjects (XtrnSection / XtrnProgram). Not yet exercised
@@ -290,18 +378,45 @@ function listDoors() {
 	}
 
 	var doors = [];
+	// Cache install-xtrn.ini reads by startup_dir -- multiple [prog:CODE]
+	// entries commonly share one install-xtrn.ini (and one startup_dir).
+	var metaCache = {};
 	try {
 		for (var i = 0; i < xtrn_area.sec_list.length; i++) {
 			var sec = xtrn_area.sec_list[i];
 			var progList = sec.prog_list || [];
 			for (var j = 0; j < progList.length; j++) {
 				var prog = progList[j];
-				doors.push({
+				var door = {
 					code: prog.code,
 					name: prog.name,
 					sec_code: sec.code,
 					sec_name: sec.name
-				});
+				};
+
+				var startupDir = prog.startup_dir || "";
+				if (!Object.prototype.hasOwnProperty.call(metaCache, startupDir)) {
+					try {
+						metaCache[startupDir] = readInstallXtrnMeta(startupDir);
+					} catch (e) {
+						log(LOG_WARNING, "binkterm_sync: install-xtrn.ini lookup failed for " + prog.code + ": " + e);
+						metaCache[startupDir] = null;
+					}
+				}
+				var meta = metaCache[startupDir];
+				if (meta) {
+					if (meta.description) {
+						door.description = meta.description;
+					}
+					if (meta.author) {
+						door.author = meta.author;
+					}
+					if (meta.categories) {
+						door.categories = meta.categories;
+					}
+				}
+
+				doors.push(door);
 			}
 		}
 	} catch (e) {
