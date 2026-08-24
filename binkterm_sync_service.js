@@ -53,7 +53,13 @@
  * SETUP
  * -----
  * 1. Copy this file to your Synchronet exec/ or mods/ directory.
- * 2. Change API_KEY below to a long random value (shared with BinktermPHP).
+ * 2. Copy binkterm_sync_service.ini.example to ctrl/binkterm_sync_service.ini
+ *    and edit it -- at minimum, set api_key to a long random value (shared
+ *    with BinktermPHP) and add BinktermPHP's IP address(es) to trusted_ips.
+ *    See "CONFIGURATION" below for the full set of keys. Keeping these
+ *    settings in ctrl/binkterm_sync_service.ini instead of editing the
+ *    constants below means re-copying an updated version of this script
+ *    (e.g. a git pull) never loses your configuration.
  * 3. In ctrl/services.ini add a section, e.g.:
  *
  *      [binkterm_sync]
@@ -74,13 +80,38 @@
  *      MaxClients = 5
  *      Options = TLS
  *
- * 4. Add BinktermPHP's IP address(es) to TRUSTED_IPS below. Connections
- *    from any other address are rejected before the request body is even
- *    parsed. Still bind the listening port to localhost or firewall it
- *    where practical -- the IP allowlist and API key are defense-in-depth,
- *    not a substitute for network restriction (spoofing/NAT edge cases,
- *    compromised hosts on the same LAN, etc.).
- * 5. Restart (or reload) the Services server.
+ * 4. Connections from any IP not listed in trusted_ips are rejected before
+ *    the request body is even parsed. Still bind the listening port to
+ *    localhost or firewall it where practical -- the IP allowlist and API
+ *    key are defense-in-depth, not a substitute for network restriction
+ *    (spoofing/NAT edge cases, compromised hosts on the same LAN, etc.).
+ * 5. Restart (or reload) the Services server. ctrl/binkterm_sync_service.ini
+ *    itself, once step 2 is done, is re-read on every connection (see
+ *    "CONFIGURATION" below) -- only script code changes (this .js file)
+ *    require a Services server restart, not config-only changes.
+ *
+ * CONFIGURATION
+ * -------------
+ * ctrl/binkterm_sync_service.ini, section [binkterm_sync], keys:
+ *
+ *   api_key                   Shared secret BinktermPHP must send as
+ *                              "api_key" in every request. No default --
+ *                              falls back to the (insecure) placeholder
+ *                              constant below if unset.
+ *   trusted_ips                Comma-separated list of exact IPs and/or
+ *                              CIDR ranges allowed to connect (see
+ *                              TRUSTED_IPS below for syntax). Falls back to
+ *                              the constant below (localhost only) if unset.
+ *   new_user_password_length  Length of the random password set on newly
+ *                              created accounts. Defaults to 24.
+ *   default_security_level    User.level assigned to newly created
+ *                              accounts. Defaults to 50.
+ *
+ * If ctrl/binkterm_sync_service.ini does not exist at all, every setting
+ * falls back to the constants in the "Configuration" section below --
+ * this keeps the script working out of the box for anyone who hasn't
+ * created the ini file yet, at the cost of needing to hand-edit this
+ * script (and losing those edits on every update) until they do.
  *
  * install-xtrn.ini enrichment
  * ---------------------------
@@ -128,7 +159,13 @@
  * cannot reach a TLS-only service, or vice versa.
  */
 
-// ---- Configuration -------------------------------------------------------
+// ---- Configuration ---------------------------------------------------
+//
+// These are fallback defaults, used only for whatever
+// ctrl/binkterm_sync_service.ini (loaded by loadConfig() below) doesn't
+// set -- see "CONFIGURATION" above and binkterm_sync_service.ini.example.
+// Prefer editing that ini file over these constants: it survives updates
+// to this script (e.g. a git pull), while edits here do not.
 
 var API_KEY = "CHANGE_ME_TO_A_LONG_RANDOM_SECRET";
 var NEW_USER_PASSWORD_LENGTH = 24; // random password; trusted RLogin bypasses it anyway
@@ -143,6 +180,54 @@ var TRUSTED_IPS = [
 	// "203.0.113.0/24",
 	// "2001:db8:1::/64",
 ];
+
+// Re-read ctrl/binkterm_sync_service.ini (if present) and override the
+// defaults above with whatever it sets. Called once per connection, same
+// as the rest of this script -- Synchronet Services scripts are re-run
+// fresh per connection, so this file is always current without needing a
+// Services server restart (only editing this .js file's own code does).
+function loadConfig() {
+	var iniPath = system.ctrl_dir + "binkterm_sync_service.ini";
+	if (!file_exists(iniPath)) {
+		return;
+	}
+
+	var f = new File(iniPath);
+	if (!f.open("r")) {
+		log(LOG_WARNING, "binkterm_sync: could not open " + iniPath + ": " + f.error);
+		return;
+	}
+
+	try {
+		var section = "binkterm_sync";
+
+		var apiKey = f.iniGetValue(section, "api_key");
+		if (apiKey) {
+			API_KEY = apiKey;
+		}
+
+		var pwLen = f.iniGetValue(section, "new_user_password_length");
+		if (pwLen) {
+			NEW_USER_PASSWORD_LENGTH = pwLen;
+		}
+
+		var secLevel = f.iniGetValue(section, "default_security_level");
+		if (secLevel !== null && secLevel !== undefined && secLevel !== "") {
+			DEFAULT_SECURITY_LEVEL = secLevel;
+		}
+
+		var trustedIps = f.iniGetValue(section, "trusted_ips", []);
+		if (trustedIps && trustedIps.length) {
+			TRUSTED_IPS = trustedIps;
+		}
+	} catch (e) {
+		log(LOG_ERR, "binkterm_sync: failed to read " + iniPath + ": " + e);
+	} finally {
+		f.close();
+	}
+}
+
+loadConfig();
 
 // ---- Helpers ---------------------------------------------------------
 

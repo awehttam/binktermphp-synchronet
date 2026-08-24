@@ -1,0 +1,32 @@
+; binkterm_sync_service.ini
+;
+; Configuration for binkterm_sync_service.js (see that file's header for the
+; full protocol/setup documentation). Copy this file to
+; ctrl/binkterm_sync_service.ini and edit it -- keeping settings here instead
+; of hand-editing the script means an updated copy of the script (e.g. a git
+; pull) never loses your configuration.
+;
+; This file is re-read on every connection, so changes here take effect
+; immediately -- no Services server restart needed (only changes to the
+; script's own code require a restart).
+
+[binkterm_sync]
+
+; Shared secret BinktermPHP must send as "api_key" in every request. Must
+; match the "secret" value in BinktermPHP's config/rlogin_synchronet_service.json.
+; Set this to a long random value -- do not leave the placeholder below.
+api_key = CHANGE_ME_TO_A_LONG_RANDOM_SECRET
+
+; Comma-separated list of IPs and/or CIDR ranges allowed to connect.
+; Entries are either an exact address (203.0.113.10, ::1) or CIDR notation
+; (203.0.113.0/24, 2001:db8::/32). No hostname lookups are performed.
+; Add BinktermPHP's IP address(es) here.
+trusted_ips = 127.0.0.1,::1
+
+; Length of the random password set on newly created accounts. Real auth
+; for these accounts happens via the trusted RLogin relationship, not this
+; password, so its exact value doesn't otherwise matter.
+new_user_password_length = 24
+
+; User.level assigned to newly created accounts.
+default_security_level = 50

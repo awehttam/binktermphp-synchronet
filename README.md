@@ -76,9 +76,13 @@ Response (failure):
 ## Setup
 
 1. Copy `binkterm_sync_service.js` to your Synchronet `exec/` or `mods/` directory.
-2. Change `API_KEY` in the file to a long random value, shared with BinktermPHP. Also
-   review `DEFAULT_SECURITY_LEVEL` (defaults to `50`), the `User.level` assigned to
-   newly created accounts.
+2. Copy `binkterm_sync_service.ini.example` to `ctrl/binkterm_sync_service.ini` and edit it --
+   at minimum, set `api_key` to a long random value shared with BinktermPHP, and add
+   BinktermPHP's IP address(es) to `trusted_ips`. Also review `default_security_level`
+   (defaults to `50`), the `User.level` assigned to newly created accounts. Keeping these
+   settings in `ctrl/binkterm_sync_service.ini` instead of hand-editing the script means a
+   later update to `binkterm_sync_service.js` (e.g. a `git pull`) never loses your
+   configuration -- see the comments in the `.ini.example` file for the full key list.
 3. Add a section to `ctrl/services.ini`, e.g.:
 
    ```ini
@@ -92,10 +96,12 @@ Response (failure):
    services (e.g. `ircd.js`) that manage their own client loop, not the
    one-thread-per-connection model this script expects.
 
-4. Add BinktermPHP's IP address(es) to `TRUSTED_IPS` in the file. Connections from any other
-   address are rejected before the request body is parsed. The IP allowlist and API key are
-   defense-in-depth, not a substitute for firewalling the port.
-5. Restart (or reload) the Services server.
+4. Connections from any IP not listed in `trusted_ips` are rejected before the request body
+   is parsed. The IP allowlist and API key are defense-in-depth, not a substitute for
+   firewalling the port.
+5. Restart (or reload) the Services server. `ctrl/binkterm_sync_service.ini` itself, once step 2
+   is done, is re-read on every connection -- only changes to the script's own code require a
+   Services server restart, not config-only changes.
 
 ## TLS
 
