@@ -4,11 +4,6 @@ A Synchronet `services.ini` service that lets [BinktermPHP](https://github.com/)
 provision (or verify) Synchronet user accounts, so BinktermPHP users can be handed off into
 Synchronet doors/games via RLogin, without a manual signup step.
 
-## Status
-
-Tested against a live Synchronet install (create and re-sync of an existing user), on a
-remote Synchronet system -- not locally.
-
 ## How it works
 
 One TCP connection = one request/response, then the connection closes. Every request carries
