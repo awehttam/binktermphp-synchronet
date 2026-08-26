@@ -85,11 +85,13 @@ Response (failure):
    Port = 24512
    Command = binkterm_sync_service.js
    MaxClients = 5
+   Options = TLS
    ```
 
-   Do not set `STATIC`/`LOOP` in `Options`; those are for long-running single-instance
-   services (e.g. `ircd.js`) that manage their own client loop, not the
-   one-thread-per-connection model this script expects.
+   `Options = TLS` is required to match BinktermPHP's client, which defaults to requiring TLS
+   on this connection -- see the [TLS](#tls) section below. Do not set `STATIC`/`LOOP` in
+   `Options`; those are for long-running single-instance services (e.g. `ircd.js`) that manage
+   their own client loop, not the one-thread-per-connection model this script expects.
 
 4. Connections from any IP not listed in `trusted_ips` are rejected before the request body
    is parsed. The IP allowlist and API key are defense-in-depth, not a substitute for
