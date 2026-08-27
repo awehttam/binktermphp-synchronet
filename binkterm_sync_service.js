@@ -475,10 +475,12 @@ function readInstallXtrnMeta(startupDir, code) {
 // throws, and check the Services server log for the caught exception.
 function listDoors() {
 	if (typeof xtrn_area === "undefined" || !xtrn_area || !xtrn_area.sec_list) {
+		log(LOG_ERR, "binkterm_sync: list_doors -- xtrn_area not available in this context");
 		sendResponse({ success: false, error: "xtrn_area not available in this context" });
 		return;
 	}
 
+	var startedAt = system.timer;
 	var doors = [];
 	// Cache install-xtrn.ini reads by startup_dir -- multiple [prog:CODE]
 	// entries commonly share one install-xtrn.ini (and one startup_dir).
@@ -522,153 +524,199 @@ function listDoors() {
 			}
 		}
 	} catch (e) {
-		log(LOG_ERR, "binkterm_sync: list_doors failed: " + e);
+		log(LOG_ERR, "binkterm_sync: list_doors failed after " +
+			((system.timer - startedAt) * 1000).toFixed(0) + "ms: " + e);
 		sendResponse({ success: false, error: "failed to enumerate xtrn_area: " + e });
 		return;
 	}
+
+	var elapsedMs = ((system.timer - startedAt) * 1000).toFixed(0);
+	var iniReads = 0;
+	for (var k in metaCache) {
+		if (Object.prototype.hasOwnProperty.call(metaCache, k)) {
+			iniReads++;
+		}
+	}
+	log(LOG_INFO, "binkterm_sync: list_doors -> " + doors.length + " doors, " +
+		iniReads + " install-xtrn.ini dir(s) scanned, " + elapsedMs + "ms");
 
 	sendResponse({ success: true, doors: doors });
 }
 
 // ---- Main ------------------------------------------------------------
 
-if (!isTrustedIp(client.ip_address)) {
-	log(LOG_WARNING, "binkterm_sync: rejected connection from untrusted IP " + client.ip_address);
-	sendResponse({ success: false, error: "connection not permitted from this address" });
-	exit();
-}
+// The whole request is handled inside main(), invoked from a try/catch
+// below so that an otherwise-uncaught exception is logged AND still produces
+// a JSON error response, rather than the client thread dying silently and
+// the caller seeing nothing but a closed socket ("could not reach the
+// service"). exit() calls inside main() end the script as before.
+function main() {
+	var connStart = system.timer;
 
-var requestLine = readln(4096);
-
-if (requestLine === undefined || requestLine === null || requestLine === "") {
-	sendResponse({ success: false, error: "empty request" });
-	exit();
-}
-
-var req;
-try {
-	req = JSON.parse(requestLine);
-} catch (e) {
-	sendResponse({ success: false, error: "invalid JSON: " + e });
-	exit();
-}
-
-if (req.api_key !== API_KEY) {
-	log(LOG_WARNING, "binkterm_sync: rejected request with bad api_key from trusted IP " + client.ip_address);
-	sendResponse({ success: false, error: "unauthorized" });
-	exit();
-}
-
-var action = req.action || "provision";
-
-if (action === "list_doors") {
-	listDoors();
-	exit();
-}
-
-if (action !== "provision") {
-	sendResponse({ success: false, error: "unknown action: " + action });
-	exit();
-}
-
-if (!req.username || typeof req.username !== "string") {
-	sendResponse({ success: false, error: "missing username" });
-	exit();
-}
-
-// Strip anything unsafe out of the incoming username.
-var fullUsername = req.username.replace(/[^A-Za-z0-9_\-\.]/g, "");
-if (fullUsername.length === 0) {
-	sendResponse({ success: false, error: "username invalid after sanitization" });
-	exit();
-}
-
-// Truncate to Synchronet's alias length limit (25 chars) if needed.
-if (fullUsername.length > 25) {
-	fullUsername = fullUsername.substring(0, 25);
-}
-
-// LEN_NAME=25, LEN_LOCATION=30 (see sbbsdefs.h). Both optional.
-var realName = sanitizeField(req.real_name, 25);
-if (realName === null) {
-	sendResponse({ success: false, error: "real_name must be a string" });
-	exit();
-}
-var location = sanitizeField(req.location, 30);
-if (location === null) {
-	sendResponse({ success: false, error: "location must be a string" });
-	exit();
-}
-
-// ---- Check for existing account ---------------------------------------
-
-var existingNum = system.matchuser(fullUsername, false);
-
-if (existingNum > 0) {
-	if (realName !== undefined || location !== undefined) {
-		var existingUser = new User(existingNum);
-		if (realName !== undefined) {
-			existingUser.name = realName;
-		}
-		if (location !== undefined) {
-			existingUser.location = location;
-		}
+	if (!isTrustedIp(client.ip_address)) {
+		log(LOG_WARNING, "binkterm_sync: rejected connection from untrusted IP " + client.ip_address);
+		sendResponse({ success: false, error: "connection not permitted from this address" });
+		exit();
 	}
+
+	var requestLine = readln(4096);
+
+	if (requestLine === undefined || requestLine === null || requestLine === "") {
+		log(LOG_WARNING, "binkterm_sync: empty request from " + client.ip_address);
+		sendResponse({ success: false, error: "empty request" });
+		exit();
+	}
+
+	var req;
+	try {
+		req = JSON.parse(requestLine);
+	} catch (e) {
+		log(LOG_WARNING, "binkterm_sync: invalid JSON from " + client.ip_address + ": " + e);
+		sendResponse({ success: false, error: "invalid JSON: " + e });
+		exit();
+	}
+
+	if (req.api_key !== API_KEY) {
+		log(LOG_WARNING, "binkterm_sync: rejected request with bad api_key from trusted IP " + client.ip_address);
+		sendResponse({ success: false, error: "unauthorized" });
+		exit();
+	}
+
+	var action = req.action || "provision";
+	log(LOG_INFO, "binkterm_sync: " + client.ip_address + " action=" + action);
+
+	if (action === "list_doors") {
+		listDoors();
+		exit();
+	}
+
+	if (action !== "provision") {
+		log(LOG_WARNING, "binkterm_sync: unknown action '" + action + "' from " + client.ip_address);
+		sendResponse({ success: false, error: "unknown action: " + action });
+		exit();
+	}
+
+	if (!req.username || typeof req.username !== "string") {
+		log(LOG_WARNING, "binkterm_sync: provision request with missing username from " + client.ip_address);
+		sendResponse({ success: false, error: "missing username" });
+		exit();
+	}
+
+	// Strip anything unsafe out of the incoming username.
+	var fullUsername = req.username.replace(/[^A-Za-z0-9_\-\.]/g, "");
+	if (fullUsername.length === 0) {
+		log(LOG_WARNING, "binkterm_sync: username '" + req.username + "' empty after sanitization (from " + client.ip_address + ")");
+		sendResponse({ success: false, error: "username invalid after sanitization" });
+		exit();
+	}
+
+	// Truncate to Synchronet's alias length limit (25 chars) if needed.
+	if (fullUsername.length > 25) {
+		fullUsername = fullUsername.substring(0, 25);
+	}
+
+	// LEN_NAME=25, LEN_LOCATION=30 (see sbbsdefs.h). Both optional.
+	var realName = sanitizeField(req.real_name, 25);
+	if (realName === null) {
+		log(LOG_WARNING, "binkterm_sync: provision request with non-string real_name from " + client.ip_address);
+		sendResponse({ success: false, error: "real_name must be a string" });
+		exit();
+	}
+	var location = sanitizeField(req.location, 30);
+	if (location === null) {
+		log(LOG_WARNING, "binkterm_sync: provision request with non-string location from " + client.ip_address);
+		sendResponse({ success: false, error: "location must be a string" });
+		exit();
+	}
+
+	// ---- Check for existing account ---------------------------------------
+
+	var existingNum = system.matchuser(fullUsername, false);
+
+	if (existingNum > 0) {
+		if (realName !== undefined || location !== undefined) {
+			var existingUser = new User(existingNum);
+			if (realName !== undefined) {
+				existingUser.name = realName;
+			}
+			if (location !== undefined) {
+				existingUser.location = location;
+			}
+		}
+
+		log(LOG_INFO, "binkterm_sync: sync existing user #" + existingNum + " (" + fullUsername + ") in " +
+			((system.timer - connStart) * 1000).toFixed(0) + "ms");
+		sendResponse({
+			success: true,
+			username: fullUsername,
+			user_number: existingNum,
+			created: false
+		});
+		exit();
+	}
+
+	// ---- Create new account -------------------------------------------------
+
+	if (!system.check_name(fullUsername, true)) {
+		log(LOG_WARNING, "binkterm_sync: username '" + fullUsername + "' rejected by system.check_name (from " + client.ip_address + ")");
+		sendResponse({ success: false, error: "username rejected by system.check_name (invalid or not unique)" });
+		exit();
+	}
+
+	var newUser;
+	try {
+		// new_user() throws a JS exception (rather than returning an error code)
+		// when check_name() would have rejected the name -- we already checked
+		// that above, but a race with another connection could still hit it.
+		newUser = system.new_user(fullUsername);
+	} catch (e) {
+		log(LOG_ERR, "binkterm_sync: system.new_user() threw for " + fullUsername + ": " + e);
+		sendResponse({ success: false, error: "account creation failed: " + e });
+		exit();
+	}
+
+	if (typeof newUser !== "object") {
+		log(LOG_ERR, "binkterm_sync: system.new_user() failed with code " + newUser + " for " + fullUsername);
+		sendResponse({ success: false, error: "account creation failed (code " + newUser + ")" });
+		exit();
+	}
+
+	// Set a random password. Real auth for this account is expected to happen
+	// via a trusted RLogin relationship configured for BinktermPHP's IP, not
+	// this password -- see project notes on the RLogin xtrn= handoff.
+	newUser.security.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
+	newUser.security.level = DEFAULT_SECURITY_LEVEL;
+
+	if (realName !== undefined) {
+		newUser.name = realName;
+	}
+	if (location !== undefined) {
+		newUser.location = location;
+	}
+
+	log(LOG_INFO, "binkterm_sync: created user #" + newUser.number + " (" + fullUsername + ") in " +
+		((system.timer - connStart) * 1000).toFixed(0) + "ms");
 
 	sendResponse({
 		success: true,
 		username: fullUsername,
-		user_number: existingNum,
-		created: false
+		user_number: newUser.number,
+		created: true
 	});
+
 	exit();
 }
 
-// ---- Create new account -------------------------------------------------
-
-if (!system.check_name(fullUsername, true)) {
-	sendResponse({ success: false, error: "username rejected by system.check_name (invalid or not unique)" });
-	exit();
-}
-
-var newUser;
 try {
-	// new_user() throws a JS exception (rather than returning an error code)
-	// when check_name() would have rejected the name -- we already checked
-	// that above, but a race with another connection could still hit it.
-	newUser = system.new_user(fullUsername);
+	main();
 } catch (e) {
-	log(LOG_ERR, "binkterm_sync: system.new_user() threw for " + fullUsername + ": " + e);
-	sendResponse({ success: false, error: "account creation failed: " + e });
+	log(LOG_ERR, "binkterm_sync: unhandled exception: " + e +
+		(e && e.stack ? "\n" + e.stack : "") +
+		(e && e.lineNumber ? " (line " + e.lineNumber + ")" : ""));
+	try {
+		sendResponse({ success: false, error: "internal error: " + e });
+	} catch (e2) {
+		log(LOG_ERR, "binkterm_sync: could not send error response: " + e2);
+	}
 	exit();
 }
-
-if (typeof newUser !== "object") {
-	log(LOG_ERR, "binkterm_sync: system.new_user() failed with code " + newUser + " for " + fullUsername);
-	sendResponse({ success: false, error: "account creation failed (code " + newUser + ")" });
-	exit();
-}
-
-// Set a random password. Real auth for this account is expected to happen
-// via a trusted RLogin relationship configured for BinktermPHP's IP, not
-// this password -- see project notes on the RLogin xtrn= handoff.
-newUser.security.password = randomPassword(NEW_USER_PASSWORD_LENGTH);
-newUser.security.level = DEFAULT_SECURITY_LEVEL;
-
-if (realName !== undefined) {
-	newUser.name = realName;
-}
-if (location !== undefined) {
-	newUser.location = location;
-}
-
-log(LOG_INFO, "binkterm_sync: created user #" + newUser.number + " (" + fullUsername + ")");
-
-sendResponse({
-	success: true,
-	username: fullUsername,
-	user_number: newUser.number,
-	created: true
-});
-
-exit();
